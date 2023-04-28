@@ -42,10 +42,7 @@ fn on_message(cli: &mqtt::AsyncClient, msg: Option<mqtt::Message>){
         let topic = msg.topic();
         let loc_name = topic.split_once("/").unwrap().1.split_once("/").unwrap().0;
 
-        let mut loc_id = 1;
-        if loc_name == "test"{
-            loc_id = 0;
-        }
+        let loc_id = find_name(loc_name);
 
         let temp = msg.payload_str().parse::<f32>().expect("Payload not float!");
 
@@ -80,6 +77,19 @@ fn set_callbacks(cli: &mqtt::AsyncClient) -> Result<(), mqtt::errors::Error>{
     Ok(())
 }
 
+fn find_name(loc_name: &str) -> i32 {
+    let url = "mysql://gemini@localhost/climate_control";
+
+    let mut conn = mysql::Conn::new(url).expect("Conn failed");
+
+    if let Some(loc_id) = conn.query(format!("SELECT locID FROM location_names WHERE name = '{}'", loc_name.to_string())).expect("Select failed").pop(){
+        return loc_id;
+    }else{
+        conn.exec_drop("INSERT INTO location_names (name) VALUES (?)",(loc_name,)).expect("Failed to insert name");
+    }
+    return conn.query(format!("SELECT locID FROM location_names WHERE name = '{}'", loc_name.to_string())).expect("Select failed").pop().expect("Name failed to add!");
+}
+
 // Connect to mysql server and push data
 fn submit_temperature(loc_id: i32, temp: f32, hum: Option<f32>) -> Result<(), mysql::Error>{
     let url = "mysql://gemini@localhost/climate_control";
@@ -99,7 +109,7 @@ fn main() -> Result<(),mqtt::errors::Error> {
 
     open_connection(&cli)?;
 
-    cli.subscribe("homie/+/temp-sensor/temperature", QOS);
+    cli.subscribe("homie/+/temp_sensor/temperature", QOS);
 
     thread::sleep(Duration::from_secs(5));
 
