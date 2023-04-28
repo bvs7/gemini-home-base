@@ -1,0 +1,6 @@
+
+# Rust target
+base-data-logger/target/*
+
+# Cargo lock
+base-data-logger/Cargo.lock
