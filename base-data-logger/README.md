@@ -5,3 +5,6 @@ Asynchronous Client. Receives data on the "homie/[station-name]/[main-node]/temp
 
 Stores that data to mysql.
 
+
+## Nest Data Access?
+Requests Nest Data and sends it out onto mqtt broker.
