@@ -87,7 +87,7 @@ async fn get_thermostat_data(
     let humidity_str: &serde_json::Value = &traits["sdm.devices.traits.Humidity"]["ambientHumidityPercent"];
     let humidity = match humidity_str {
         serde_json::Value::Number(n) => n.as_f64().unwrap(),
-        _ => panic!("Unexpected humidity value: {}", ),
+        _ => panic!("Unexpected humidity value: {}", humidity_str),
     };
 
     let hvac_status = match &traits["sdm.devices.traits.ThermostatHvac"]["status"] {
@@ -153,7 +153,7 @@ async fn main() -> Result<(), Error> {
     // Create mqtt client
     let cli = mqtt_client().await.expect("Failed to get mqtt client!");
     // Every 5 seconds, collect thermostat data, then push that data to the homie mqtt broker
-    let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+    let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
     loop {
         interval.tick().await;
         let (temperature_C, humidity, hvac_status) =
