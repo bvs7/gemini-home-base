@@ -73,16 +73,21 @@ async fn get_thermostat_data(
 
     // Get thermostat data from response
     let response_json: serde_json::Value = response.json().await?;
+    println!("response_json: {}", response_json);
     let traits = response_json["traits"].clone();
-    let temperature_C = match &traits["sdm.devices.traits.Temperature"]["ambientTemperatureCelsius"]
+    let temperature_str: &serde_json::Value = &traits["sdm.devices.traits.Temperature"]["ambientTemperatureCelsius"];
+    println!("temperature_str: {}", temperature_str);
+
+    let temperature_C = match temperature_str
     {
         serde_json::Value::Number(n) => n.as_f64().unwrap(),
-        _ => panic!("Unexpected temperature value"),
+        _ => panic!("Unexpected temperature value: {}", temperature_str),
     };
 
-    let humidity = match &traits["sdm.devices.traits.Humidity"]["ambientHumidityPercent"] {
+    let humidity_str: &serde_json::Value = &traits["sdm.devices.traits.Humidity"]["ambientHumidityPercent"];
+    let humidity = match humidity_str {
         serde_json::Value::Number(n) => n.as_f64().unwrap(),
-        _ => panic!("Unexpected humidity value"),
+        _ => panic!("Unexpected humidity value: {}", ),
     };
 
     let hvac_status = match &traits["sdm.devices.traits.ThermostatHvac"]["status"] {
