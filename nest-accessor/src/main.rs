@@ -14,9 +14,6 @@ const DEVICE_ID: &str =
     "AVPHwEv41qUeoJJ_JXB1UNgpamQreNbEtiQAFHzJKhhZPvxJTofYF3XLMVG8_kmhYbBrkqeFrT0yJYyTsnNzct0-7t8_";
 const DEVICE_HOST: &str = "https://smartdevicemanagement.googleapis.com/v1";
 
-const CLIENT_ID: &str = "";
-const CLIENT_SECRET: &str = "";
-
 const MQTT_HOST: &str = "localhost";
 const MQTT_PORT: u16 = 1883;
 const MQTT_USERNAME: &str = "nest-accessor";
@@ -31,7 +28,7 @@ struct refresh_response_data {
     token_type: String,
 }
 
-async fn refresh_token(client_id: &str, client_data: &str) -> Result<String, Error> {
+async fn refresh_token(client_id: &str, client_secret: &str) -> Result<String, Error> {
     let client = Client::new();
 
     // Create client POST request and add data
@@ -54,12 +51,12 @@ async fn refresh_token(client_id: &str, client_data: &str) -> Result<String, Err
 
 async fn get_thermostat_data(
     client_id: &str,
-    client_data: &str,
+    client_secret: &str,
 ) -> Result<(f64, f64, String), Error> {
     let client = Client::new();
 
     // Get access token
-    let access_token = refresh_token(client_id, client_data).await?;
+    let access_token = refresh_token(client_id, client_secret).await?;
 
     // Create client GET request and add data
     let response = client
@@ -96,14 +93,14 @@ async fn get_thermostat_data(
     Ok((temperature_C, humidity, hvac_status))
 }
 
-async fn mqtt_client() -> Result<AsyncClient, Error> {
+async fn mqtt_client() -> Result<AsyncClient, mqtt::Error> {
     // Create mqtt client
     let create_opts = mqtt::CreateOptionsBuilder::new()
         .server_uri("tcp://localhost:1883")
         .client_id("nest-accessor")
         .finalize();
 
-    let cli = mqtt::Client::new(create_opts)?;
+    let cli = mqtt::AsyncClient::new(create_opts)?;
     let conn_opts = mqtt::ConnectOptionsBuilder::new()
         .keep_alive_interval(std::time::Duration::from_secs(20))
         .clean_session(true)
@@ -114,11 +111,11 @@ async fn mqtt_client() -> Result<AsyncClient, Error> {
 }
 
 async fn push_to_mqtt(
-    cli: AsyncClient,
+    cli: &AsyncClient,
     temperature_C: f64,
     humidity: f64,
     hvac_status: String,
-) -> Result<(), Error> {
+) -> Result<(), mqtt::Error> {
     // Publish data to mqtt broker
     let msg = mqtt::Message::new(
         "homie/nest/thermostat/temperature",
@@ -130,13 +127,13 @@ async fn push_to_mqtt(
     let msg = mqtt::Message::new("homie/nest/thermostat/humidity", humidity.to_string(), 0);
     cli.publish(msg).await?;
 
-    let msg = mqtt::Message::new("homie/nest/thermostat/hvac_status", hvac_status, 0);
-    cli.publish(msg).await?;
+    // let msg = mqtt::Message::new("homie/nest/thermostat/hvac_status", hvac_status, 0);
+    // cli.publish(msg).await?;
 
     Ok(())
 }
 
-async fn get_secrets(fname: &str) -> Result<(String, String), Error> {
+async fn get_secrets(fname: &str) -> Result<(String, String), std::io::Error> {
     let contents = fs::read_to_string(fname)?;
     let mut lines = contents.lines();
     let client_id = lines.next().unwrap().to_string();
@@ -147,20 +144,20 @@ async fn get_secrets(fname: &str) -> Result<(String, String), Error> {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     // Get secrets from file
-    let (client_id, client_secret) = get_secrets("secrets.txt").await?;
+    let (client_id, client_secret) = get_secrets("../secrets.id").await.expect("Failed to get secrets!");
     // Create mqtt client
-    let cli = mqtt_client().await?;
+    let cli = mqtt_client().await.expect("Failed to get mqtt client!");
     // Every 5 seconds, collect thermostat data, then push that data to the homie mqtt broker
     let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
     loop {
         interval.tick().await;
         let (temperature_C, humidity, hvac_status) =
-            get_thermostat_data(&client_id, &client_secret).await?;
+            get_thermostat_data(&client_id, &client_secret).await.expect("Failed to get thermostat data!");
         println!(
             "Temperature: {} C, Humidity: {}%, HVAC Status: {}",
             temperature_C, humidity, hvac_status
         );
-        push_to_mqtt(cli, temperature_C, humidity, hvac_status).await?;
+        push_to_mqtt(&cli, temperature_C, humidity, hvac_status).await.expect("Failed to push data to mqtt!");
     }
 
     Ok(())
